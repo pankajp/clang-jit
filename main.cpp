@@ -1,12 +1,14 @@
 
 #include <cstdio>
+#include <iostream>
 #include "jit.h"
+
 void setupPredefinedFunctions(ClangJitCompiler& compiler);
 
 extern "C" int error_handler(int level, const char *filename, int line, int column, const char *message)
 {
     static int count = 0;
-    static char *levelString[] = {"Ignore", "Note", "Remark", "Warning", "Error", "Fatal"};
+    static const char *levelString[] = {"Ignore", "Note", "Remark", "Warning", "Error", "Fatal"};
     printf("%s(%d): %s\n", levelString[level], ++count, message);
     printf("    File: %s\n", filename);
     printf("    Line: %d\n\n", line);
@@ -18,11 +20,18 @@ int main(int ac, char **av)
     ClangJitCompiler compiler;
     try {
         // Use ClangJitSourceType_C_String if you want to compile from string data.
-        int fileType = ClangJitSourceType_C_File;
+        std::string filename(av[1]);
+        int fileType = filename.substr(filename.rfind('.')) == ".c" ? ClangJitSourceType_C_File : ClangJitSourceType_CXX_File;
 
-        compiler.setOptimizeLevel(3);
+        compiler.setOptimizeLevel(1);
         setupPredefinedFunctions(compiler);
-        compiler.compile(av[1], fileType, error_handler);
+        std::string compile_args;
+        for (int i=2; i<ac; i++) {
+            compile_args += av[i];
+            compile_args += " ";
+        };
+        std::cout << "jit-compiling: " << filename << " " << fileType << std::endl;
+        compiler.compile(av[1], fileType, error_handler, compile_args.c_str());
         compiler.finalize();
 
         typedef int (*mainf_t)();

@@ -58,49 +58,49 @@ double ks_tanh(double d1) { return tanh(d1); }
 void setupPredefinedFunctions(ClangJitCompiler& compiler)
 {
     // Memory management.
-    ClangJitCompiler::addSymbol("ks_strdup", ks_strdup);
-    ClangJitCompiler::addSymbol("ks_malloc", ks_malloc);
-    ClangJitCompiler::addSymbol("ks_calloc", ks_calloc);
-    ClangJitCompiler::addSymbol("ks_realloc", ks_realloc);
-    ClangJitCompiler::addSymbol("ks_free", ks_free);
+    ClangJitCompiler::addSymbol("ks_strdup", (void*)ks_strdup);
+    ClangJitCompiler::addSymbol("ks_malloc", (void*)ks_malloc);
+    ClangJitCompiler::addSymbol("ks_calloc", (void*)ks_calloc);
+    ClangJitCompiler::addSymbol("ks_realloc", (void*)ks_realloc);
+    ClangJitCompiler::addSymbol("ks_free", (void*)ks_free);
 
     // Math functions.
-    ClangJitCompiler::addSymbol("sin", ks_sin);
-    ClangJitCompiler::addSymbol("cos", ks_cos);
-    ClangJitCompiler::addSymbol("tan", ks_tan);
-    ClangJitCompiler::addSymbol("fabs", ks_fabs);
-    ClangJitCompiler::addSymbol("pow", ks_pow);
-    ClangJitCompiler::addSymbol("fmod", ks_fmod);
-    ClangJitCompiler::addSymbol("ceil", ks_ceil);
-    ClangJitCompiler::addSymbol("floor", ks_floor);
-    ClangJitCompiler::addSymbol("sqrt", ks_sqrt);
-    ClangJitCompiler::addSymbol("exp", ks_exp);
-    ClangJitCompiler::addSymbol("log10", ks_log10);
-    ClangJitCompiler::addSymbol("log", ks_log);
-    ClangJitCompiler::addSymbol("asin", ks_asin);
-    ClangJitCompiler::addSymbol("acos", ks_acos);
-    ClangJitCompiler::addSymbol("atan", ks_atan);
-    ClangJitCompiler::addSymbol("atan2", ks_atan2);
-    ClangJitCompiler::addSymbol("sinh", ks_sinh);
-    ClangJitCompiler::addSymbol("cosh", ks_cosh);
-    ClangJitCompiler::addSymbol("tanh", ks_tanh);
+    ClangJitCompiler::addSymbol("sin", (void*)ks_sin);
+    ClangJitCompiler::addSymbol("cos", (void*)ks_cos);
+    ClangJitCompiler::addSymbol("tan", (void*)ks_tan);
+    ClangJitCompiler::addSymbol("fabs", (void*)ks_fabs);
+    ClangJitCompiler::addSymbol("pow", (void*)ks_pow);
+    ClangJitCompiler::addSymbol("fmod", (void*)ks_fmod);
+    ClangJitCompiler::addSymbol("ceil", (void*)ks_ceil);
+    ClangJitCompiler::addSymbol("floor", (void*)ks_floor);
+    ClangJitCompiler::addSymbol("sqrt", (void*)ks_sqrt);
+    ClangJitCompiler::addSymbol("exp", (void*)ks_exp);
+    ClangJitCompiler::addSymbol("log10", (void*)ks_log10);
+    ClangJitCompiler::addSymbol("log", (void*)ks_log);
+    ClangJitCompiler::addSymbol("asin", (void*)ks_asin);
+    ClangJitCompiler::addSymbol("acos", (void*)ks_acos);
+    ClangJitCompiler::addSymbol("atan", (void*)ks_atan);
+    ClangJitCompiler::addSymbol("atan2", (void*)ks_atan2);
+    ClangJitCompiler::addSymbol("sinh", (void*)ks_sinh);
+    ClangJitCompiler::addSymbol("cosh", (void*)ks_cosh);
+    ClangJitCompiler::addSymbol("tanh", (void*)ks_tanh);
 
     // Printf style formatters
-    ClangJitCompiler::addSymbol("printf", printf);
-    ClangJitCompiler::addSymbol("putchar", putchar);
+    ClangJitCompiler::addSymbol("printf", (void*)printf);
+    ClangJitCompiler::addSymbol("putchar", (void*)putchar);
 
     // JIT can't find following string functions.
-    ClangJitCompiler::addSymbol("sscanf", sscanf);
-    ClangJitCompiler::addSymbol("strtol", strtol);
-    ClangJitCompiler::addSymbol("strtoll", strtoll);
+    ClangJitCompiler::addSymbol("sscanf", (void*)sscanf);
+    ClangJitCompiler::addSymbol("strtol", (void*)strtol);
+    ClangJitCompiler::addSymbol("strtoll", (void*)strtoll);
 
     // Helpers for standard I/O.
-    ClangJitCompiler::addSymbol("getStdIn", getStdIn);
-    ClangJitCompiler::addSymbol("getStdOut", getStdOut);
-    ClangJitCompiler::addSymbol("getStdErr", getStdErr);
+    ClangJitCompiler::addSymbol("getStdIn", (void*)getStdIn);
+    ClangJitCompiler::addSymbol("getStdOut", (void*)getStdOut);
+    ClangJitCompiler::addSymbol("getStdErr", (void*)getStdErr);
 
     // File I/O interfaces
-    ClangJitCompiler::addSymbol("fopen", fopen);
-    ClangJitCompiler::addSymbol("fgets", fgets);
-    ClangJitCompiler::addSymbol("fclose", fclose);
+    ClangJitCompiler::addSymbol("fopen", (void*)fopen);
+    ClangJitCompiler::addSymbol("fgets", (void*)fgets);
+    ClangJitCompiler::addSymbol("fclose", (void*)fclose);
 }

@@ -1,6 +1,10 @@
+// #include <stdint.h>
+
+typedef int num;
+
 int printf(const char *, ...);
 
-int fib(int n)
+num fib(num n)
 {
     if (n < 3) return n;
     return fib(n-2) + fib(n-1);
@@ -8,5 +12,5 @@ int fib(int n)
 
 int main()
 {
-    return printf("%d\n", fib(34));
+    return printf("%ld\n", (long)fib(36));
 }

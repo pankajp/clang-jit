@@ -35,7 +35,7 @@ extern int clang_JitIrSave(void *ctx, const char *filename);
 extern const char *clang_JitIrLoad(void *ctx, const char *filename);
 extern const char *clang_JitIrMergeFile(void *ctx, const char *filename);
 extern const char *clang_JitIrMerge(void *ctx, void *another);
-extern void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_t handler);
+extern void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_t handler, const char* compile_args);
 extern void *clang_JitIrOptimize(void *ctx);
 extern void *clang_JitGenerateTargetCode(void *ctx);
 extern void *clang_JitGetFunctionAddress(void *ctx, const char *name);
@@ -168,9 +168,9 @@ public:
         }
     }
 
-    ClangJitCompiler& generateIR(const char *source, int type, error_handler_t handler)
+    ClangJitCompiler& generateIR(const char *source, int type, error_handler_t handler, const char* compile_args)
     {
-        if (!clang_JitIrCompile(ctx_, source, type, handler)) {
+        if (!clang_JitIrCompile(ctx_, source, type, handler, compile_args)) {
             throw std::runtime_error("Compile error.");
         }
         return *this;
@@ -192,9 +192,9 @@ public:
         return *this;
     }
 
-    ClangJitCompiler& compile(const char *source, int type, error_handler_t handler)
+    ClangJitCompiler& compile(const char *source, int type, error_handler_t handler, const char* compile_args)
     {
-        if (!clang_JitIrCompile(ctx_, source, type, handler)) {
+        if (!clang_JitIrCompile(ctx_, source, type, handler, compile_args)) {
             throw std::runtime_error("Compile error.");
         }
         if (!clang_JitIrOptimize(ctx_)) {
@@ -215,7 +215,9 @@ public:
         if (!addr) {
             throw std::runtime_error("Function not found.");
         }
-        return static_cast<R>(addr);
+        R result;
+        result = (R)addr;
+        return result;
     }
 
 private:

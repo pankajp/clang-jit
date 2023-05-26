@@ -1,46 +1,9 @@
-#ifdef _MSC_VER
-#pragma warning(disable:4091)
-#pragma warning(disable:4100)
-#pragma warning(disable:4127)
-#pragma warning(disable:4141)
-#pragma warning(disable:4146)
-#pragma warning(disable:4180)
-#pragma warning(disable:4204)
-#pragma warning(disable:4244)
-#pragma warning(disable:4245)
-#pragma warning(disable:4258)
-#pragma warning(disable:4267)
-#pragma warning(disable:4291)
-#pragma warning(disable:4310)
-#pragma warning(disable:4319)
-#pragma warning(disable:4324)
-#pragma warning(disable:4345)
-#pragma warning(disable:4351)
-#pragma warning(disable:4355)
-#pragma warning(disable:4456)
-#pragma warning(disable:4457)
-#pragma warning(disable:4458)
-#pragma warning(disable:4459)
-#pragma warning(disable:4503)
-#pragma warning(disable:4505)
-#pragma warning(disable:4510)
-#pragma warning(disable:4512)
-#pragma warning(disable:4577)
-#pragma warning(disable:4592)
-#pragma warning(disable:4610)
-#pragma warning(disable:4624)
-#pragma warning(disable:4702)
-#pragma warning(disable:4706)
-#pragma warning(disable:4709)
-#pragma warning(disable:4722)
-#pragma warning(disable:4800)
-#pragma warning(disable:4701)
-#pragma warning(disable:4703)
-#pragma warning(disable:4389)
-#pragma warning(disable:4611)
-#pragma warning(disable:4805)
-#endif
-
+#include <clang/Basic/LangStandard.h>
+#include <clang/Basic/SourceLocation.h>
+#include <iostream>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/MC/TargetRegistry.h>
+#include <memory>
 #include <sstream>
 
 #include <clang/AST/ASTContext.h>
@@ -50,7 +13,7 @@
 #include <clang/Basic/FileManager.h>
 #include <clang/Basic/FileSystemOptions.h>
 #include <clang/Basic/LangOptions.h>
-#include <clang/Basic/MemoryBufferCache.h>
+// #include <clang/Basic/MemoryBufferCache.h>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Basic/TargetInfo.h>
 #include <clang/CodeGen/CodeGenAction.h>
@@ -78,11 +41,12 @@
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Support/TargetRegistry.h>
+// #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Object/ObjectFile.h>
 #include <llvm/Linker/Linker.h>
+#include <vector>
 
 #include "jit.h"
 
@@ -145,7 +109,7 @@ static void InitializeLLVM()
     llvm::initializeAnalysis(Registry);
     llvm::initializeTransformUtils(Registry);
     llvm::initializeInstCombine(Registry);
-    llvm::initializeInstrumentation(Registry);
+    // llvm::initializeInstrumentation(Registry);
     llvm::initializeTarget(Registry);
 
     llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
@@ -171,9 +135,9 @@ public:
         auto& sm = Info.getSourceManager();
         auto& sl = Info.getLocation();
         auto loc = sm.getPresumedLoc(sl);
-        auto filename = loc.getFilename();
-        unsigned int line = loc.getLine();
-        auto column = loc.getColumn();
+        auto filename = loc.isValid() ? loc.getFilename() : "-";
+        unsigned int line = loc.isValid() ? loc.getLine() : 0;
+        auto column = loc.isValid() ? loc.getColumn() : 0;
         clang::SmallString<256> OutStr;
         Info.FormatDiagnostic(OutStr);
         switch (Level) {
@@ -234,7 +198,7 @@ struct ClangJitContext {
         options[ClangJitOption_OptimizeLevel] = 2;
         options[ClangJitOption_ErrorLimit] = 100;
         options[ClangJitOption_DegugMode] = false;
-        triple = llvm::sys::getDefaultTargetTriple();
+        triple = LLVMGetDefaultTargetTriple();
     }
 
     ~ClangJitContext()
@@ -485,7 +449,7 @@ const char *clang_JitOutputObjectFile(void *ctx, const char *name)
         return errorMessage;
     }
 
-    auto targetTriple = llvm::sys::getDefaultTargetTriple();
+    auto targetTriple = LLVMGetDefaultTargetTriple();
     jitContext->module->setTargetTriple(targetTriple);
 
     std::string error;
@@ -503,14 +467,14 @@ const char *clang_JitOutputObjectFile(void *ctx, const char *name)
     jitContext->module->setDataLayout(theTargetMachine->createDataLayout());
 
     std::error_code ec;
-    llvm::raw_fd_ostream dest(name, ec, llvm::sys::fs::F_None);
+    llvm::raw_fd_ostream dest(name, ec, llvm::sys::fs::OF_None);
     if (ec) {
         snprintf(errorMessage, 255, "Cannot open file: %s", name);
         return errorMessage;
     }
 
     llvm::legacy::PassManager pass;
-    auto fileType = llvm::TargetMachine::CGFT_ObjectFile;
+    auto fileType = llvm::CGFT_ObjectFile;
     if (theTargetMachine->addPassesToEmitFile(pass, dest, nullptr, fileType)) {
         snprintf(errorMessage, 255, "Cannot emit a file of this type.");
         return errorMessage;
@@ -522,7 +486,7 @@ const char *clang_JitOutputObjectFile(void *ctx, const char *name)
     return nullptr;
 }
 
-void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_t handler)
+void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_t handler, const char* compile_args)
 {
     ClangJitContext *jitContext = (ClangJitContext*)ctx;
     if (!jitContext || jitContext->llvm) return nullptr;
@@ -534,20 +498,27 @@ void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_
     std::unique_ptr<DiagnosticConsumerHandlerCall> diagHandler = std::make_unique<DiagnosticConsumerHandlerCall>(handler);
     std::unique_ptr<clang::DiagnosticsEngine> diagnosticsEngine =
         std::make_unique<clang::DiagnosticsEngine>(diagIDs, diagnosticOptions, diagHandler.get(), false);
+    clang::FileSystemOptions fso;
+    clang::FileManager fm(fso);
+    clang::SourceManager* sm = new clang::SourceManager(*diagnosticsEngine.get(), fm, false);
+    diagnosticsEngine->setSourceManager(sm);
 
     clang::CompilerInstance compilerInstance;
+    // compilerInstance.getHeaderSearchOpts().AddPath("/usr/include", clang::frontend::System, false, false);
+    // compilerInstance.getHeaderSearchOpts().AddPath("/usr/include/c++/13", clang::frontend::CXXSystem, false, false);
     auto& compilerInvocation = compilerInstance.getInvocation();
 
     // compiler invocation
     std::stringstream ss;
-    ss << "-triple=" << jitContext->triple;
+    ss << compile_args;
+    ss << " -triple=" << jitContext->triple;
     if (jitContext->options[ClangJitOption_OptimizeLevel] > 0) {
         ss << " -O" << jitContext->options[ClangJitOption_OptimizeLevel];
     }
     if (type == ClangJitSourceType_CXX_String || type == ClangJitSourceType_CXX_File) {
-        ss << " -fcxx-exceptions";
+        ss << " -x c++ -std=c++17 -fcxx-exceptions -I /usr/include/c++/13 -I /usr/include/c++/13/x86_64-redhat-linux -I /usr/lib64/clang/16/include ";
     }
-    ss << " -fms-extensions";
+    ss << " -I/usr/include ";
     std::istream_iterator<std::string> begin(ss);
     std::istream_iterator<std::string> end;
     std::istream_iterator<std::string> i = begin;
@@ -562,7 +533,11 @@ void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_
 
     // compiler instance.
     clang::CompilerInvocation::CreateFromArgs(compilerInvocation,
-        itemcstrs.data(), itemcstrs.data() + itemcstrs.size(), *diagnosticsEngine.get());
+        itemcstrs, *diagnosticsEngine.get());
+    for (auto const& s: compilerInvocation.getCC1CommandLine()) {
+        std::cout << s << " ";
+    }
+    std::cout << std::endl;
 
     // Options.
     // auto& preprocessorOptions = compilerInvocation.getPreprocessorOpts();
@@ -586,8 +561,8 @@ void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_
     std::unique_ptr<llvm::MemoryBuffer> buffer;
     switch (type) {
     case ClangJitSourceType_C_String:
-        buffer = llvm::MemoryBuffer::getMemBufferCopy(source, "SourceTextStringBuffer");
-        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(buffer.get(), clang::InputKind::C));
+        buffer = llvm::MemoryBuffer::getMemBufferCopy(source, "fib.cxx");
+        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(buffer->getMemBufferRef(), clang::InputKind(clang::Language::C)));
         break;
     case ClangJitSourceType_CXX_String:
         // codeGenOptions.UnwindTables = 1;
@@ -597,11 +572,12 @@ void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_
         // languageOptions->RTTI = 1;
         languageOptions->Bool = 1;
         languageOptions->CPlusPlus = 1;
-        buffer = llvm::MemoryBuffer::getMemBufferCopy(source, "SourceTextStringBuffer");
-        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(buffer.get(), clang::InputKind::CXX));
+        languageOptions->LangStd = clang::LangStandard::Kind::lang_cxx17;
+        buffer = llvm::MemoryBuffer::getMemBufferCopy(source, "fib.cxx");
+        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(buffer->getMemBufferRef(), clang::InputKind(clang::Language::CXX)));
         break;
     case ClangJitSourceType_C_File:
-        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(source, clang::InputKind::C));
+        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(source, clang::InputKind(clang::Language::C)));
         break;
     case ClangJitSourceType_CXX_File:
         // codeGenOptions.UnwindTables = 1;
@@ -611,7 +587,8 @@ void *clang_JitIrCompile(void *ctx, const char *source, int type, error_handler_
         // languageOptions->RTTI = 1;
         languageOptions->Bool = 1;
         languageOptions->CPlusPlus = 1;
-        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(source, clang::InputKind::CXX));
+        languageOptions->LangStd = clang::LangStandard::Kind::lang_cxx17;
+        frontEndOptions.Inputs.push_back(clang::FrontendInputFile(source, clang::InputKind(clang::Language::CXX)));
         break;
     default:
         return nullptr;
@@ -645,21 +622,23 @@ void *clang_JitIrOptimize(void *ctx)
     if (!jitContext || !jitContext->module) return nullptr;
 
     clang::CompilerInstance compilerInstance;
+    // compilerInstance.getHeaderSearchOpts().AddPath("/usr/include", clang::frontend::System, false, false);
+    // compilerInstance.getHeaderSearchOpts().AddPath("/usr/include/c++/13", clang::frontend::CXXSystem, false, false);
     auto& compilerInvocation = compilerInstance.getInvocation();
     auto& codeGenOptions = compilerInvocation.getCodeGenOpts();
 
     // optimizations.
     llvm::PassBuilder passBuilder;
-    llvm::LoopAnalysisManager loopAnalysisManager(codeGenOptions.DebugPassManager);
-    llvm::FunctionAnalysisManager functionAnalysisManager(codeGenOptions.DebugPassManager);
-    llvm::CGSCCAnalysisManager cGSCCAnalysisManager(codeGenOptions.DebugPassManager);
-    llvm::ModuleAnalysisManager moduleAnalysisManager(codeGenOptions.DebugPassManager);
+    llvm::LoopAnalysisManager loopAnalysisManager;
+    llvm::FunctionAnalysisManager functionAnalysisManager;
+    llvm::CGSCCAnalysisManager cGSCCAnalysisManager;
+    llvm::ModuleAnalysisManager moduleAnalysisManager;
     passBuilder.registerModuleAnalyses(moduleAnalysisManager);
     passBuilder.registerCGSCCAnalyses(cGSCCAnalysisManager);
     passBuilder.registerFunctionAnalyses(functionAnalysisManager);
     passBuilder.registerLoopAnalyses(loopAnalysisManager);
     passBuilder.crossRegisterProxies(loopAnalysisManager, functionAnalysisManager, cGSCCAnalysisManager, moduleAnalysisManager);
-    llvm::ModulePassManager modulePassManager = passBuilder.buildPerModuleDefaultPipeline(llvm::PassBuilder::OptimizationLevel::O3);
+    llvm::ModulePassManager modulePassManager = passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
     modulePassManager.run(*jitContext->module, moduleAnalysisManager);
 
     return jitContext;
@@ -690,161 +669,3 @@ void clang_JitFinalizeCode(void *ctx)
 }
 
 } // extern "C"
-
-////////////////////////////////////////////////////////////////////////////
-// Clang Driver needs version.dll for MSVC
-////////////////////////////////////////////////////////////////////////////
-#if _WIN32
-#pragma comment(lib, "version.lib")
-
-////////////////////////////////////////////////////////////////////////////
-// Clang library
-////////////////////////////////////////////////////////////////////////////
-#pragma comment(lib, "clang/lib/clangAnalysis.lib")
-#pragma comment(lib, "clang/lib/clangAST.lib")
-#pragma comment(lib, "clang/lib/clangBasic.lib")
-#pragma comment(lib, "clang/lib/clangCodeGen.lib")
-#pragma comment(lib, "clang/lib/clangDriver.lib")
-#pragma comment(lib, "clang/lib/clangEdit.lib")
-#pragma comment(lib, "clang/lib/clangFrontend.lib")
-#pragma comment(lib, "clang/lib/clangLex.lib")
-#pragma comment(lib, "clang/lib/clangParse.lib")
-#pragma comment(lib, "clang/lib/clangSema.lib")
-#pragma comment(lib, "clang/lib/clangSerialization.lib")
-
-////////////////////////////////////////////////////////////////////////////
-// LLVM library
-////////////////////////////////////////////////////////////////////////////
-#pragma comment(lib, "clang/lib/LLVMAggressiveInstCombine.lib")
-#pragma comment(lib, "clang/lib/LLVMAnalysis.lib")
-#pragma comment(lib, "clang/lib/LLVMBinaryFormat.lib")
-#pragma comment(lib, "clang/lib/LLVMBitReader.lib")
-#pragma comment(lib, "clang/lib/LLVMBitWriter.lib")
-#pragma comment(lib, "clang/lib/LLVMCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMCore.lib")
-#pragma comment(lib, "clang/lib/LLVMCoroutines.lib")
-#pragma comment(lib, "clang/lib/LLVMCoverage.lib")
-#pragma comment(lib, "clang/lib/LLVMDebugInfoCodeView.lib")
-#pragma comment(lib, "clang/lib/LLVMDemangle.lib")
-#pragma comment(lib, "clang/lib/LLVMExecutionEngine.lib")
-#pragma comment(lib, "clang/lib/LLVMGlobalISel.lib")
-#pragma comment(lib, "clang/lib/LLVMInstCombine.lib")
-#pragma comment(lib, "clang/lib/LLVMInstrumentation.lib")
-#pragma comment(lib, "clang/lib/LLVMipo.lib")
-#pragma comment(lib, "clang/lib/LLVMIRReader.lib")
-#pragma comment(lib, "clang/lib/LLVMLinker.lib")
-#pragma comment(lib, "clang/lib/LLVMLTO.lib")
-#pragma comment(lib, "clang/lib/LLVMMC.lib")
-#pragma comment(lib, "clang/lib/LLVMMCDisassembler.lib")
-#pragma comment(lib, "clang/lib/LLVMMCJIT.lib")
-#pragma comment(lib, "clang/lib/LLVMMCParser.lib")
-#pragma comment(lib, "clang/lib/LLVMObjCARCOpts.lib")
-#pragma comment(lib, "clang/lib/LLVMObject.lib")
-#pragma comment(lib, "clang/lib/LLVMOption.lib")
-#pragma comment(lib, "clang/lib/LLVMPasses.lib")
-#pragma comment(lib, "clang/lib/LLVMProfileData.lib")
-#pragma comment(lib, "clang/lib/LLVMRuntimeDyld.lib")
-#pragma comment(lib, "clang/lib/LLVMScalarOpts.lib")
-#pragma comment(lib, "clang/lib/LLVMSelectionDAG.lib")
-#pragma comment(lib, "clang/lib/LLVMSupport.lib")
-#pragma comment(lib, "clang/lib/LLVMTarget.lib")
-#pragma comment(lib, "clang/lib/LLVMTransformUtils.lib")
-#pragma comment(lib, "clang/lib/LLVMVectorize.lib")
-
-////////////////////////////////////////////////////////////////////////////
-// Supported Targets
-////////////////////////////////////////////////////////////////////////////
-#pragma comment(lib, "clang/lib/LLVMAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMAsmPrinter.lib")
-
-#pragma comment(lib, "clang/lib/LLVMXCoreAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMXCoreCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMXCoreDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMXCoreInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMX86AsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMX86AsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMX86CodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMX86Desc.lib")
-#pragma comment(lib, "clang/lib/LLVMX86Info.lib")
-#pragma comment(lib, "clang/lib/LLVMX86Utils.lib")
-
-#pragma comment(lib, "clang/lib/LLVMAArch64AsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMAArch64AsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMAArch64CodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMAArch64Desc.lib")
-#pragma comment(lib, "clang/lib/LLVMAArch64Info.lib")
-#pragma comment(lib, "clang/lib/LLVMAArch64Utils.lib")
-
-#pragma comment(lib, "clang/lib/LLVMAMDGPUAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMAMDGPUAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMAMDGPUCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMAMDGPUDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMAMDGPUInfo.lib")
-#pragma comment(lib, "clang/lib/LLVMAMDGPUUtils.lib")
-
-#pragma comment(lib, "clang/lib/LLVMARMAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMARMAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMARMCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMARMDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMARMInfo.lib")
-#pragma comment(lib, "clang/lib/LLVMARMUtils.lib")
-
-#pragma comment(lib, "clang/lib/LLVMBPFAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMBPFAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMBPFCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMBPFDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMBPFInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMHexagonAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMHexagonCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMHexagonDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMHexagonInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMLanaiAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMLanaiAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMLanaiCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMLanaiDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMLanaiInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMMipsAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMMipsAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMMipsCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMMipsDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMMipsInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMMSP430AsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMMSP430AsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMMSP430CodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMMSP430Desc.lib")
-#pragma comment(lib, "clang/lib/LLVMMSP430Info.lib")
-
-#pragma comment(lib, "clang/lib/LLVMNVPTXAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMNVPTXCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMNVPTXDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMNVPTXInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMPowerPCAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMPowerPCAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMPowerPCCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMPowerPCDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMPowerPCInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMSparcAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMSparcAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMSparcCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMSparcDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMSparcInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMSystemZAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMSystemZAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMSystemZCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMSystemZDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMSystemZInfo.lib")
-
-#pragma comment(lib, "clang/lib/LLVMWebAssemblyAsmParser.lib")
-#pragma comment(lib, "clang/lib/LLVMWebAssemblyAsmPrinter.lib")
-#pragma comment(lib, "clang/lib/LLVMWebAssemblyCodeGen.lib")
-#pragma comment(lib, "clang/lib/LLVMWebAssemblyDesc.lib")
-#pragma comment(lib, "clang/lib/LLVMWebAssemblyInfo.lib")
-#endif
